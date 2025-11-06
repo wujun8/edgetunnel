@@ -38,7 +38,7 @@ export default {
                         return 响应;
                     }
                 }
-                return fetch(Pages静态页面 + '/login');
+                return fetch(Pages静态页面 + '/login').then(backgroundReplace);
             } else if (访问路径.startsWith('admin')) {//验证cookie后响应管理页面
                 const cookies = request.headers.get('Cookie') || '';
                 const authCookie = cookies.split(';').find(c => c.trim().startsWith('auth='))?.split('=')[1];
@@ -163,16 +163,7 @@ export default {
                 }
 
                 await 请求日志记录(env, request, 访问IP, 'Admin_Login', config_JSON);
-                return fetch(Pages静态页面 + '/admin').then(async r => {
-                  const newHeaders = new Headers(r.headers);
-                  newHeaders.delete('content-length');
-                  let text = await r.text();
-                  text = text.replace(
-                    '<iframe id="background-iframe" src="/" title="背景内容"></iframe>',
-                    '<iframe id="background-iframe" src="/fake" title="背景内容"></iframe>'
-                  );
-                  return new Response(text, {status: 200, headers: newHeaders});
-                });
+                return fetch(Pages静态页面 + '/admin').then(backgroundReplace);
             } else if (访问路径 === 'logout') {//清除cookie并跳转到登录页面
                 const 响应 = new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
                 响应.headers.set('Set-Cookie', 'auth=; Path=/; Max-Age=0; HttpOnly');
@@ -1283,4 +1274,15 @@ async function html1101(host, 访问IP) {
   </script> 
 </body>
 </html>`;
+}
+
+async function backgroundReplace(r) {
+  const newHeaders = new Headers(r.headers);
+  newHeaders.delete('content-length');
+  let text = await r.text();
+  text = text.replace(
+    '<iframe id="background-iframe" src="/" title="背景内容"></iframe>',
+    '<iframe id="background-iframe" src="/fake" title="背景内容"></iframe>'
+  );
+  return new Response(text, {status: 200, headers: newHeaders});
 }
