@@ -68,6 +68,16 @@ export default {
                         }
                     }
                     return new Response(JSON.stringify({ success: false, data: [] }, null, 2), { status: 403, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+                } else if (访问路径 === 'admin/check') {// SOCKS5代理检查
+                    let 检测代理响应;
+                    if (url.searchParams.has('socks5')) {
+                        检测代理响应 = await SOCKS5可用性验证('socks5', url.searchParams.get('socks5'));
+                    } else if (url.searchParams.has('http')) {
+                        检测代理响应 = await SOCKS5可用性验证('http', url.searchParams.get('http'));
+                    } else {
+                        return new Response(JSON.stringify({ error: '缺少代理参数' }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+                    }
+                    return new Response(JSON.stringify(检测代理响应, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
                 }
 
                 config_JSON = await 读取config_JSON(env, url.host, userID);
@@ -306,44 +316,25 @@ function handleConnection(ws, request, FIXED_UUID) {
     let socket, writer, reader, info;
     let isFirstMsg = true, bytesReceived = 0, stallCount = 0, reconnectCount = 0;
     let lastData = Date.now();
-    let udpStreamWrite = null, isDns = false;
     const timers = {};
     const dataBuffer = [];
     const earlyDataHeader = request.headers.get("sec-websocket-protocol") || "";
     async function 处理魏烈思握手(data) {
         const bytes = new Uint8Array(data);
-        const 协议版本 = new Uint8Array([bytes[0], 0]);
         ws.send(new Uint8Array([bytes[0], 0]));
         if (Array.from(bytes.slice(1, 17)).map(n => n.toString(16).padStart(2, '0')).join('').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5') !== FIXED_UUID) throw new Error('Auth failed');
         const offset1 = 18 + bytes[17] + 1;
-        const command = bytes[offset1];
-        const port = (bytes[offset1 + 1] << 8) | bytes[offset1 + 2];
-        const addrType = bytes[offset1 + 3];
-        const offset2 = offset1 + 4;
+        const port = (bytes[offset1] << 8) | bytes[offset1 + 1];
+        const addrType = bytes[offset1 + 2];
+        const offset2 = offset1 + 3;
         const { host, length } = parseAddress(bytes, offset2, addrType === 1 ? 1 : addrType === 2 ? 2 : 4);
         const payload = bytes.slice(length);
         if (host.includes(atob('c3BlZWQuY2xvdWRmbGFyZS5jb20='))) throw new Error('Access');
-
-        // 判断是否为UDP命令(0x02)
-        const isUDP = command === 2;
-        if (isUDP) {
-            if (port === 53) {
-                isDns = true;
-                const 魏烈思响应头 = new Uint8Array([协议版本[0], 0]);
-                const { write } = await handleUDPOutBound(ws, 魏烈思响应头);
-                udpStreamWrite = write;
-                udpStreamWrite(payload);
-                return { socket: null, writer: null, reader: null, info: { host, port, isUDP: true } };
-            } else {
-                throw new Error('UDP proxy only enable for DNS which is port 53');
-            }
-        }
-
         const sock = await createConnection(host, port);
         await sock.opened;
         const w = sock.writable.getWriter();
         if (payload.length) await w.write(payload);
-        return { socket: sock, writer: w, reader: sock.readable.getReader(), info: { host, port, isUDP: false } };
+        return { socket: sock, writer: w, reader: sock.readable.getReader(), info: { host, port } };
     }
 
     async function 处理木马握手(data) {
@@ -353,44 +344,19 @@ function handleConnection(ws, request, FIXED_UUID) {
 
         const socks5Data = bytes.slice(58);
         if (socks5Data.byteLength < 6) throw new Error("invalid SOCKS5 request data");
-
-        const command = socks5Data[0];
-        // 0x01 TCP (CONNECT)
-        // 0x02 UDP
-        const isUDP = command === 2;
-
-        if (command !== 1 && command !== 2) {
-            throw new Error(`unsupported command ${command}, only TCP (CONNECT) and UDP are allowed`);
-        }
+        if (socks5Data[0] !== 1) throw new Error("unsupported command, only TCP (CONNECT) is allowed");
 
         const { host, length } = parseAddress(socks5Data, 2, socks5Data[1]);
         if (!host) throw new Error(`address is empty, addressType is ${socks5Data[1]}`);
         if (host.includes(atob('c3BlZWQuY2xvdWRmbGFyZS5jb20='))) throw new Error('Access');
 
         const port = (socks5Data[length] << 8) | socks5Data[length + 1];
-        const payload = socks5Data.slice(length + 4);
-
-        // 处理UDP DNS请求
-        if (isUDP) {
-            if (port === 53) {
-                isDns = true;
-                // 木马协议不需要响应头,直接传入空数组
-                const 木马响应头 = new Uint8Array(0);
-                const { write } = await handleUDPOutBound(ws, 木马响应头);
-                udpStreamWrite = write;
-                if (payload.length) udpStreamWrite(payload);
-                return { socket: null, writer: null, reader: null, info: { host, port, isUDP: true } };
-            } else {
-                throw new Error('UDP proxy only enable for DNS which is port 53');
-            }
-        }
-
-        // 处理TCP连接
         const sock = await createConnection(host, port);
         await sock.opened;
         const w = sock.writable.getWriter();
+        const payload = socks5Data.slice(length + 4);
         if (payload.length) await w.write(payload);
-        return { socket: sock, writer: w, reader: sock.readable.getReader(), info: { host, port, isUDP: false } };
+        return { socket: sock, writer: w, reader: sock.readable.getReader(), info: { host, port } };
     }
 
     async function createConnection(host, port) {
@@ -557,18 +523,11 @@ function handleConnection(ws, request, FIXED_UUID) {
                 const bytes = new Uint8Array(firstData);
                 if (bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a) ({ socket, writer, reader, info } = await 处理木马握手(firstData));
                 else ({ socket, writer, reader, info } = await 处理魏烈思握手(firstData));
-
-                // 如果是DNS UDP请求，不需要启动定时器和读取循环
-                if (!isDns) {
-                    startTimers();
-                    readLoop();
-                }
+                startTimers();
+                readLoop();
             } else {
                 lastData = Date.now();
-                // 处理UDP DNS数据
-                if (isDns && udpStreamWrite) {
-                    await udpStreamWrite(evt.data);
-                } else if (socket && writer) {
+                if (socket && writer) {
                     await writer.write(evt.data);
                 } else {
                     dataBuffer.push(evt.data);
@@ -613,62 +572,6 @@ function parseAddress(bytes, offset, addrType) {
     }
     return { host, length: endOffset };
 }
-
-const WS_READY_STATE_OPEN = 1;
-async function handleUDPOutBound(webSocket, 协议响应头) {
-    let 响应头已发送 = false;
-    const transformStream = new TransformStream({
-        start(controller) { },
-        transform(chunk, controller) {
-            // UDP消息前2字节是UDP数据的长度
-            for (let index = 0; index < chunk.byteLength;) {
-                const lengthBuffer = chunk.slice(index, index + 2);
-                const udpPacketLength = new DataView(lengthBuffer).getUint16(0);
-                const udpData = new Uint8Array(
-                    chunk.slice(index + 2, index + 2 + udpPacketLength)
-                );
-                index = index + 2 + udpPacketLength;
-                controller.enqueue(udpData);
-            }
-        },
-        flush(controller) { }
-    });
-
-    // 处理DNS UDP查询
-    transformStream.readable.pipeTo(new WritableStream({
-        async write(chunk) {
-            const resp = await fetch('https://1.1.1.1/dns-query', {
-                method: 'POST',
-                headers: {
-                    'content-type': 'application/dns-message',
-                },
-                body: chunk,
-            });
-            const dnsQueryResult = await resp.arrayBuffer();
-            const udpSize = dnsQueryResult.byteLength;
-            const udpSizeBuffer = new Uint8Array([(udpSize >> 8) & 0xff, udpSize & 0xff]);
-
-            if (webSocket.readyState === WS_READY_STATE_OPEN) {
-                console.log(`DoH success and dns message length is ${udpSize}`);
-                if (响应头已发送) {
-                    webSocket.send(await new Blob([udpSizeBuffer, dnsQueryResult]).arrayBuffer());
-                } else {
-                    webSocket.send(await new Blob([协议响应头, udpSizeBuffer, dnsQueryResult]).arrayBuffer());
-                    响应头已发送 = true;
-                }
-            }
-        }
-    })).catch((error) => {
-        console.error('DNS UDP has error:', error);
-    });
-    const writer = transformStream.writable.getWriter();
-    return {
-        write(chunk) {
-            writer.write(chunk);
-        }
-    };
-}
-
 ////////////////////////////////SOCKS5/HTTP函数///////////////////////////////////////////////
 async function httpConnect(addressRemote, portRemote) {
     const { username, password, hostname, port } = parsedSocks5Address;
@@ -1132,6 +1035,13 @@ async function 反代参数获取(request) {
 }
 
 async function 获取SOCKS5账号(address) {
+    if (address.includes('@')) {
+        const lastAtIndex = address.lastIndexOf('@');
+        let userPassword = address.substring(0, lastAtIndex).replaceAll('%3D', '=');
+        const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
+        if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
+        address = `${userPassword}@${address.substring(lastAtIndex + 1)}`;
+    }
     const atIndex = address.lastIndexOf("@");
     const [hostPart, authPart] = atIndex === -1 ? [address, undefined] : [address.substring(atIndex + 1), address.substring(0, atIndex)];
 
@@ -1287,6 +1197,29 @@ async function 解析地址端口(proxyIP) {
         端口 = parseInt(proxyIP.slice(colonIndex + 1), 10) || 端口;
     }
     return [地址, 端口];
+}
+
+async function SOCKS5可用性验证(代理协议 = 'socks5', 代理参数) {
+    try { parsedSocks5Address = await 获取SOCKS5账号(代理参数); } catch (err) { return { success: false, error: err.message, proxy: 代理协议 + "://" + 代理参数 }; }
+    const { username, password, hostname, port } = parsedSocks5Address;
+    const 完整代理参数 = username && password ? `${username}:${password}@${hostname}:${port}` : `${hostname}:${port}`;
+    try {
+        const tcpSocket = 代理协议 == 'socks5' ? await socks5Connect('check.socks5.090227.xyz', 80) : await httpConnect('check.socks5.090227.xyz', 80);
+        if (!tcpSocket) return { success: false, error: '无法连接到代理服务器', proxy: 代理协议 + "://" + 完整代理参数 };
+        try {
+            const writer = tcpSocket.writable.getWriter(), encoder = new TextEncoder();
+            await writer.write(encoder.encode(`GET /cdn-cgi/trace HTTP/1.1\r\nHost: check.socks5.090227.xyz\r\nConnection: close\r\n\r\n`));
+            writer.releaseLock();
+            const reader = tcpSocket.readable.getReader(), decoder = new TextDecoder();
+            let response = '';
+            try { while (true) { const { done, value } = await reader.read(); if (done) break; response += decoder.decode(value, { stream: true }); } } finally { reader.releaseLock(); }
+            await tcpSocket.close();
+            return { success: true, proxy: 代理协议 + "://" + 完整代理参数, ip: response.match(/ip=(.*)/)[1], loc: response.match(/loc=(.*)/)[1] };
+        } catch (error) {
+            try { await tcpSocket.close(); } catch (e) { console.log('关闭连接时出错:', e); }
+            return { success: false, error: error.message, proxy: 代理协议 + "://" + 完整代理参数 };
+        }
+    } catch (error) { return { success: false, error: error.message, proxy: 代理协议 + "://" + 完整代理参数 }; }
 }
 //////////////////////////////////////////////////////HTML伪装页面///////////////////////////////////////////////
 async function nginx() {
