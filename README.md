@@ -107,7 +107,7 @@
 | ADMIN | `123456` |✅| 面板登录密码 |
 | KEY | `token` |❌| 快速订阅密钥，访问`/token`即可快读订阅。 |
 | URL | `https://blog.cmliussss.com` |❌| 主页反代伪装(乱设容易触发反诈，反代被墙的网站会加速域名被墙) |
-
+| GO2SOCKS5  | `blog.cmliussss.com`,`*.ip111.cn`,`*google.com` |❌| 设置`SOCKS5`或`HTTP`变量之后，可设置强制使用socks5访问名单(设置为`*`可作为全局代理) |
 
 ## 🔧 实用技巧
 该项目部署的节点可通过节点PATH(路径)的方式，使用指定的`PROXYIP`或`SOCKS5`！！！**
