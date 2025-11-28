@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "include": ["/", "/fake", "/login", "/logout", "/admin/*", "/sub", "/locations"],
+  "exclude": []
+}
