@@ -303,7 +303,7 @@ export default {
                                 }
 
                                 if (noTls) {
-                                  return `${协议类型}://${config_JSON.UUID}@${节点地址}:80?security=none&type=${config_JSON.传输协议}&host=${节点HOST}&path=${encodeURIComponent(config_JSON.PATH)}&encryption=none#${encodeURIComponent(节点备注)}`;
+                                  return `${协议类型}://00000000-0000-4000-8000-000000000000@@${节点地址}:80?security=none&type=${config_JSON.传输协议}&host=${节点HOST}&path=${encodeURIComponent((随机路径() + 节点路径).replace('/?', '?'))}&encryption=none#${encodeURIComponent(节点备注)}`;
                                 }
                                 return `${协议类型}://00000000-0000-4000-8000-000000000000@${节点地址}:${节点端口}?security=tls&type=${config_JSON.传输协议 + ECHLINK参数}&host=example.com&fp=${config_JSON.Fingerprint}&sni=example.com&path=${encodeURIComponent((随机路径() + 节点路径).replace('/?', '?')) + TLS分片参数}&encryption=none${config_JSON.跳过证书验证 ? '&insecure=1&allowInsecure=1' : ''}#${encodeURIComponent(节点备注)}`;
                             }).filter(item => item !== null).join('\n');
