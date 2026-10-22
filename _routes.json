@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/", "/fake", "/login", "/logout", "/admin/*", "/sub", "/locations", "/*/ws20251213", "/cdn-cgi/rum"],
+  "include": ["/", "/fake", "/login", "/logout", "/admin/*", "/sub", "/version", "/locations", "/*/ws20251213", "/cdn-cgi/rum"],
   "exclude": []
 }
