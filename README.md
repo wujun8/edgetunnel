@@ -28,6 +28,10 @@
 
 ---
 
+## 本地 CLI 发布
+
+可在本地通过 Wrangler 将项目发布到 Cloudflare Pages，并配置 KV 与自定义域名。请先阅读[本地 Pages 发布指南](docs/cloudflare-pages.md)。
+
 ## 💡 快速部署
 >[!TIP]
 > 📖 **详尽图文教程**：[edgetunnel 部署指南](https://cmliussss.com/p/edt2/)

@@ -1,0 +1,15 @@
+{
+  "accountId": "YOUR_ACCOUNT_ID",
+  "projectName": "my-edgetunnel",
+  "kvNamespaceTitle": "my-edgetunnel-kv",
+  "vars": {},
+  "secrets": {
+    "ADMIN": "CHANGE_ME"
+  },
+  "domains": [
+    {
+      "name": "edge.example.com",
+      "zoneId": "YOUR_ZONE_ID"
+    }
+  ]
+}

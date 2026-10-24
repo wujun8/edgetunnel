@@ -1,0 +1,16 @@
+{
+  "name": "edgetunnel-local-deploy",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "cf:deploy": "node scripts/cloudflare-pages.mjs deploy",
+    "cf:domains": "node scripts/cloudflare-pages.mjs domains",
+    "cf:plan": "node scripts/cloudflare-pages.mjs deploy --dry-run",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.152.0"
+  }
+}
